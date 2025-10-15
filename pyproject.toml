@@ -1,0 +1,52 @@
+# Update AT LEAST the commented fields, then remove the comments.
+# This is just ONE EXAMPLE of a working config, the options are endless.
+# Even a plain old setup.py will work fine if used correctly.
+
+[build-system]                              # build system: template default
+requires = ["hatchling", "hatch-vcs"]       # is the modern backend "hatch"
+build-backend = "hatchling.build"           # with versions coming from git
+
+[project]
+name = "glass.ext.helloworld"               # change to glass.ext.<yourname>
+description = "GLASS extension template"    # change to your description
+readme = "README.md"
+requires-python = ">=3.6"                   # update according to end-of-life
+license = "MIT"                             # update if necessary
+authors = [                                 # update with your author list
+    { name = "Author Name", email = "author@example.com" },
+]
+classifiers = [                             # update if necessary
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [                            # add your dependencies here
+    "glass>=2023.6.dev0",                   # update to required glass version
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]             # set up optional dependencies
+test = [                                    # e.g. for testing or docs
+    "pytest",
+]
+docs = [
+    "sphinx",
+    "sphinxcontrib-katex",
+    "numpydoc",
+    "furo",
+]
+
+[project.urls]                              # update these to your URLs
+Homepage = "https://github.com/glass-dev/glass.ext.template"
+Documentation = "https://glass.readthedocs.io/projects/extension/"
+Issues = "https://github.com/glass-dev/glass.ext.template/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.sdist]
+strict-naming = false
+
+[tool.hatch.build.targets.wheel]
+strict-naming = false
+packages = ["glass"]
