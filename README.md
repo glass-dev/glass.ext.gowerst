@@ -1,35 +1,88 @@
-Template for GLASS extension packages
-=====================================
+# GLASS extension for loading Gower St simulations
 
-This repository contains a template for how GLASS extension packages can be
-structured to appear as part of the `glass.ext` namespace.
+This repository contains a GLASS extension for loading Gower St simulations.
 
-To get started, you can either [use this template] to create a new GitHub
-project, or clone the repository to manually set up the new project.
+## Quick start
 
-If your extension is to be imported as `import glass.ext.helloworld`, the name
-of your extension package should be `glass.ext.helloworld` -- dots and all.
-It also makes sense to use that as the name of your repository.
+Load a GowerSt simulation by pointing the `glass.ext.gowerst.load()` function
+to the simulations `.par` file:
 
-To create a GLASS extension, you do not need to use this template.  The only
-requirement is that your project has your extension modules under the
-`glass.ext` namespace, meaning in a file such as `glass/ext/helloworld.py`.
-Apart from the `ext` folder, the `glass` folder should be empty -- modules
-placed there will not be importable, because the core `glass` module is not a
-namespace, only `glass.ext` is.
+```py
+sim = glass.ext.gowerst.load("~/data/gowerst/run014/control.par")
+```
 
-If you are using this template, it is enough to change the project metadata in
-[`pyproject.toml`].  Be thorough, and look at the comments.  Then, you need to
-rename the Python module from [`glass/ext/template.py`] to your intended module
-name.  This should match the project name you set in the metadata.  As usual,
-if your module is large and spans multiple files, you can create a subfolder
-for it, e.g. `glass/ext/helloworld/`.
+The resulting object has attributes such as `sim.parameters`, `sim.cosmology`,
+and `sim.shells` that describe the simulation.
 
-Lastly, don't forget to match the author information in [`pyproject.toml`], the
-[`LICENSE.txt`] file, and the header of the now-renamed
-[`glass/ext/template.py`] module.
+The matter shells can be loaded with the `sim.lightcone()` function.
 
-[use this template]: https://github.com/glass-dev/glass.ext.template/generate
-[`pyproject.toml`]: pyproject.toml
-[`glass/ext/template.py`]: glass/ext/template.py
-[`LICENSE.txt`]: LICENSE.txt
+## Cosmology
+
+The simulation cosmology is returned from the stored CLASS file, without
+computing any new cosmological quantities.
+
+The returned cosmology object follows the Cosmology API standard and can be
+passed directly into GLASS functions that require it.
+
+## Worked example
+
+```py
+import numpy as np
+import healpy as hp
+
+import glass
+import glass.ext.gowerst
+
+# nside for computation
+nside = 1024
+
+# load simulation
+sim = glass.ext.gowerst.load("~/data/gowerst/run014/control.par")
+
+# get simulation parameters
+cosmo = sim.cosmology
+shells = sim.shells
+
+# localised redshift distribution with arbitrary normalisation
+z = np.linspace(0.0, 2.0, 101)
+dndz = np.exp(-0.5 * (z - 0.5)**2 / (0.1)**2)
+
+# partition the redshift distribution over the shells
+ngal = glass.partition(z, dndz, shells)
+
+# this will load the lightcone iteratively
+# up to redshift 2 and rescaled to nside
+matter = sim.lightcone(zmax=2.0, nside=nside)
+
+# this will compute the convergence field iteratively
+convergence = glass.MultiPlaneConvergence(cosmo)
+
+# the integrated convergence and shear field over the redshift distribution
+kappa_bar = np.zeros(12 * nside**2, dtype=float)
+gamma_bar = np.zeros(12 * nside**2, dtype=complex)
+
+# load each delta map and process
+for i, delta in enumerate(matter):
+    # add lensing plane from the window function of this shell
+    convergence.add_window(delta, shells[i])
+
+    # get convergence field
+    kappa = convergence.kappa
+
+    # compute shear field
+    gamma, = glass.from_convergence(kappa, shear=True)
+
+    # add to mean fields using the galaxy number density as weight
+    kappa_bar += ngal[i] * kappa
+    gamma_bar += ngal[i] * gamma
+
+# compute the overall galaxy density
+ngal = np.trapezoid(dndz, z)
+
+# normalise mean fields by the total galaxy number density
+kappa_bar /= np.sum(ngal)
+gamma_bar /= np.sum(ngal)
+
+# save the resulting mean kappa and gamma maps
+np.savez("nbody.npz", kappa=kappa_bar, gamma1=gamma_bar.real, gamma2=gamma_bar.imag)
+```
