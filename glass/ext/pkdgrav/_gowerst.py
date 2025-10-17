@@ -4,30 +4,61 @@ import healpy as hp
 import numpy as np
 
 
-def resample(n, nside):
-    # keep the number of particles constant
-    ntot = n.sum()
-    n = hp.ud_grade(n, nside, power=-2)
-    assert n.sum() == ntot, "resampling lost particles!"
-    return n
+class NpyLoader:
+    def __init__(self, sim, path):
+        self.path = path if path is not None else sim.dir
+        self.outname = sim.parameters["achOutName"]
+
+    def __call__(self, step):
+        tag = "lightcone" if step > 1 else "incomplete"
+        path = os.path.join(self.path, f"{self.outname}.{step:05d}.{tag}.npy")
+        return np.load(path)
 
 
-def read_gowerst(sim, dir=None, *, zmax=None, nside=None, raw=False):
-    if dir is None:
-        dir = sim.dir
+class ParquetLoader:
+    read_parquet = None
 
-    outname = sim.parameters["achOutName"]
+    @classmethod
+    def load(cls, path):
+        if cls.read_parquet is None:
+            try:
+                from pandas import read_parquet
+            except ModuleNotFoundError as exc:
+                raise ValueError("parquet format requires pandas") from exc
+            else:
+                cls.read_parquet = read_parquet
+        return cls.read_parquet(path)
+
+    def __init__(self, sim, path):
+        self.path = path if path is not None else sim.dir
+        self.outname = sim.parameters["achOutName"]
+        self.nside = sim.nside
+
+    def __call__(self, step):
+        path = os.path.join(self.path, f"particles_{step}_{self.nside}.parquet")
+        return self.load(path).to_numpy().reshape(-1)
+
+
+def read_gowerst(sim, path=None, format="npy", *, zmax=None, nside=None, raw=False):
+    if format == "npy":
+        loader = NpyLoader(sim, path)
+    elif format == "parquet":
+        loader = ParquetLoader(sim, path)
+    else:
+        raise ValueError(f"unknown format: {format}")
+
     steps = range(sim.parameters["nSteps"], 0, -1)
     for shell, step in zip(sim.shells, steps):
         if zmax is not None and zmax < shell.za.min():
             break
 
-        tag = "lightcone" if step > 1 else "incomplete"
-        path = os.path.join(dir, f"{outname}.{step:05d}.{tag}.npy")
-        n = np.load(path)
+        n = loader(step)
 
         if nside is not None and nside != hp.get_nside(n):
-            n = resample(n, nside)
+            # keep the number of particles constant
+            ntot = n.sum()
+            n = hp.ud_grade(n, nside, power=-2)
+            assert n.sum() == ntot, "resampling lost particles!"
 
         if raw:
             yield n
