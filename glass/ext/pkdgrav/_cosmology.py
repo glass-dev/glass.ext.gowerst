@@ -23,7 +23,50 @@ def make_dist_interp(z, x):
     return interp.antiderivative()
 
 
-class ClassCosmology:
+class CosmologyMixin:
+    def __repr__(self) -> str:
+        clsname = self.__class__.__name__
+        attrs = [f"{k}={v!r}," for k, v in vars(self).items() if not k.startswith("_")]
+        return f"{clsname}(\n    " + "\n    ".join(attrs) + "\n)"
+
+    @cached_property
+    def _K(self) -> float:
+        # curvature parameter for convenience
+        Omega_k0 = self.Omega_k0
+        if np.abs(Omega_k0) < 1e-15:
+            return 0.0
+        return np.copysign(np.sqrt(np.fabs(Omega_k0)), Omega_k0)
+
+    @cached_property
+    def H0(self) -> float:
+        return self.h * 100.0
+
+    def scale_factor(self, z: float) -> float:
+        return self.scale_factor0 / (1 + z)
+
+    @cached_property
+    def hubble_distance(self) -> float:
+        return 299792.458 / self.H0
+
+    def comoving_distance(self, z: float, z2: float | None = None) -> float:
+        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
+        return self.hubble_distance * x
+
+    def transverse_comoving_distance(self, z: float, z2: float | None = None) -> float:
+        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
+        k = self._K
+        if k > 0:
+            x = np.sinh(x * k) / k
+        elif k < 0:
+            x = np.sin(x * k) / k
+        return self.hubble_distance * x
+
+    @cached_property
+    def Omega_k0(self) -> float:
+        return 1 - self.Omega_tot0
+
+
+class ClassCosmology(CosmologyMixin):
     h: float
     scale_factor0: float
     Omega_tot0: float
@@ -123,51 +166,14 @@ class ClassCosmology:
         self._Omega_gamma = make_log_interp(x, rho_g / rho_crit)
         self._Omega_nu = make_log_interp(x, sum(rho_ncdm) / rho_crit)
 
-        # curvature parameter for convenience
-        if np.abs(1 - Omega_tot) < 1e-15:
-            self._K = 0.0
-        elif Omega_tot < 1:
-            self._K = np.sqrt(1 - Omega_tot)
-        else:
-            self._K = -np.sqrt(Omega_tot - 1)
-
         # interpolation for distance functions
         self._dist = make_dist_interp(z, 100 * h / H)
-
-    def __repr__(self) -> str:
-        clsname = self.__class__.__name__
-        attrs = [f"{k}={v!r}," for k, v in vars(self).items() if not k.startswith("_")]
-        return f"{clsname}(\n    " + "\n    ".join(attrs) + "\n)"
 
     def H(self, z: float) -> float:
         return self._H(z)
 
-    @cached_property
-    def H0(self) -> float:
-        return self.h * 100.0
-
     def H_over_H0(self, z: float) -> float:
         return self.H(z) / self.H0
-
-    def scale_factor(self, z: float) -> float:
-        return self.scale_factor0 / (1 + z)
-
-    def comoving_distance(self, z: float, z2: float | None = None) -> float:
-        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
-        return self.hubble_distance * x
-
-    def transverse_comoving_distance(self, z: float, z2: float | None = None) -> float:
-        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
-        k = self._K
-        if k > 0:
-            x = np.sinh(x * k) / k
-        elif k < 0:
-            x = np.sin(x * k) / k
-        return self.hubble_distance * x
-
-    @cached_property
-    def hubble_distance(self) -> float:
-        return 299792.458 / self.H0
 
     def age(self, z: float) -> float:
         return self._age(z)
@@ -200,15 +206,11 @@ class ClassCosmology:
     def Omega_nu(self, z: float) -> float:
         return self._Omega_nu(z)
 
-    @cached_property
-    def Omega_k0(self) -> float:
-        return 1 - self.Omega_tot0
-
     def Omega_k(self, z: float) -> float:
         return 1 - self.Omega_tot(z)
 
 
-class SimpleCosmology:
+class SimpleCosmology(CosmologyMixin):
     h: float
     scale_factor0: float
     Omega_tot0: float
@@ -245,14 +247,6 @@ class SimpleCosmology:
         self.w_0 = w0
         self.w_a = wa
 
-        # curvature parameter for convenience
-        if np.abs(1 - self.Omega_tot0) < 1e-15:
-            self._K = 0.0
-        elif self.Omega_tot0 < 1:
-            self._K = np.sqrt(1 - self.Omega_tot0)
-        else:
-            self._K = -np.sqrt(self.Omega_tot0 - 1)
-
         # integration for distance functions
         @np.vectorize(otypes=[float])
         def _dist(z: float) -> float:
@@ -267,24 +261,8 @@ class SimpleCosmology:
 
         self._dist = _dist
 
-    def __repr__(self) -> str:
-        clsname = self.__class__.__name__
-        attrs = [f"{k}={v!r}," for k, v in vars(self).items() if not k.startswith("_")]
-        return f"{clsname}(\n    " + "\n    ".join(attrs) + "\n)"
-
-    @cached_property
-    def Omega_k0(self) -> float:
-        return 1 - self.Omega_tot0
-
-    def Omega_k(self, z: float) -> float:
-        return 1 - self.Omega_tot(z)
-
     def H(self, z: float) -> float:
         return self.H0 * self.H_over_H0(z)
-
-    @cached_property
-    def H0(self) -> float:
-        return self.h * 100.0
 
     def H_over_H0(self, z: float) -> float:
         a = 1 / (1 + z)
@@ -301,23 +279,3 @@ class SimpleCosmology:
                 )
             )
         ) / (a**2)
-
-    def scale_factor(self, z: float) -> float:
-        return self.scale_factor0 / (1 + z)
-
-    def comoving_distance(self, z: float, z2: float | None = None) -> float:
-        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
-        return self.hubble_distance * x
-
-    def transverse_comoving_distance(self, z: float, z2: float | None = None) -> float:
-        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
-        k = self._K
-        if k > 0:
-            x = np.sinh(x * k) / k
-        elif k < 0:
-            x = np.sin(x * k) / k
-        return self.hubble_distance * x
-
-    @cached_property
-    def hubble_distance(self) -> float:
-        return 299792.458 / self.H0
