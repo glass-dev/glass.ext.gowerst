@@ -3,6 +3,7 @@ from functools import cached_property
 
 import h5py
 import numpy as np
+from scipy.integrate import quad
 from scipy.interpolate import CubicSpline
 
 
@@ -22,7 +23,7 @@ def make_dist_interp(z, x):
     return interp.antiderivative()
 
 
-class Cosmology:
+class ClassCosmology:
     h: float
     scale_factor0: float
     Omega_tot0: float
@@ -205,3 +206,118 @@ class Cosmology:
 
     def Omega_k(self, z: float) -> float:
         return 1 - self.Omega_tot(z)
+
+
+class SimpleCosmology:
+    h: float
+    scale_factor0: float
+    Omega_tot0: float
+    Omega_b0: float
+    Omege_dm0: float
+    Omega_m0: float
+    Omega_de0: float
+    Omega_gamma0: float
+    w_0: float
+    w_a: float
+
+    def __init__(self, par):
+        # get parameters
+        h: float = par.get("h", 0.0)
+        dOmega0: float = par.get("dOmega0", 1.0)
+        dLambda: float = par.get("dLambda", 0.0)
+        dOmegaDE: float = par.get("dOmegaDE", 0.0)
+        w0: float = par.get("w0", -1.0)
+        wa: float = par.get("wa", 0.0)
+        dOmegaRad: float = par.get("dOmegaRad", 0.0)
+        dOmegab: float = par.get("dOmegab", 0.0)
+
+        # cosmological parameters
+        self.h = h
+        self.scale_factor0 = 1.0
+        self.Omega_tot0 = dOmega0 + dLambda + dOmegaDE + dOmegaRad
+        self.Omega_b0 = dOmegab
+        self.Omega_dm0 = dOmega0 - dOmegab
+        self.Omega_m0 = dOmega0
+        self._Omega_lambda0 = dLambda
+        self._Omega_w0wa0 = dOmegaDE
+        self.Omega_de0 = dLambda + dOmegaDE
+        self.Omega_gamma0 = dOmegaRad
+        self.w_0 = w0
+        self.w_a = wa
+
+        # curvature parameter for convenience
+        if np.abs(1 - self.Omega_tot0) < 1e-15:
+            self._K = 0.0
+        elif self.Omega_tot0 < 1:
+            self._K = np.sqrt(1 - self.Omega_tot0)
+        else:
+            self._K = -np.sqrt(self.Omega_tot0 - 1)
+
+        # integration for distance functions
+        @np.vectorize(otypes=[float])
+        def _dist(z: float) -> float:
+            return quad(
+                lambda z: self.H0 / self.H(z),
+                0.0,
+                z,
+                epsabs=0.0,
+                epsrel=1e-13,
+                limit=1000,
+            )[0]
+
+        self._dist = _dist
+
+    def __repr__(self) -> str:
+        clsname = self.__class__.__name__
+        attrs = [f"{k}={v!r}," for k, v in vars(self).items() if not k.startswith("_")]
+        return f"{clsname}(\n    " + "\n    ".join(attrs) + "\n)"
+
+    @cached_property
+    def Omega_k0(self) -> float:
+        return 1 - self.Omega_tot0
+
+    def Omega_k(self, z: float) -> float:
+        return 1 - self.Omega_tot(z)
+
+    def H(self, z: float) -> float:
+        return self.H0 * self.H_over_H0(z)
+
+    @cached_property
+    def H0(self) -> float:
+        return self.h * 100.0
+
+    def H_over_H0(self, z: float) -> float:
+        a = 1 / (1 + z)
+        a_w0wa = a ** (-3 * (1 + self.w_0 + self.w_a)) * np.exp(-3 * self.w_a * (1 - a))
+        return np.sqrt(
+            self.Omega_gamma0
+            + a
+            * (
+                self.Omega_m0
+                + a
+                * (
+                    self.Omega_k0
+                    + a**2 * (self._Omega_lambda0 + a_w0wa * self._Omega_w0wa0)
+                )
+            )
+        ) / (a**2)
+
+    def scale_factor(self, z: float) -> float:
+        return self.scale_factor0 / (1 + z)
+
+    def comoving_distance(self, z: float, z2: float | None = None) -> float:
+        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
+        return self.hubble_distance * x
+
+    def transverse_comoving_distance(self, z: float, z2: float | None = None) -> float:
+        x = self._dist(z) if z2 is None else self._dist(z2) - self._dist(z)
+        k = self._K
+        if k > 0:
+            x = np.sinh(x * k) / k
+        elif k < 0:
+            x = np.sin(x * k) / k
+        return self.hubble_distance * x
+
+    @cached_property
+    def hubble_distance(self) -> float:
+        return 299792.458 / self.H0
