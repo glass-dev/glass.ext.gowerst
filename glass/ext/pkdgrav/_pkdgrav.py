@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import os
 
 import numpy as np
@@ -17,9 +18,10 @@ class Simulation:
     parameters: dict[str, object] = dataclasses.field(init=False, repr=False)
     cosmology: dict[str, object] = dataclasses.field(init=False, repr=False)
 
+    outname: str | None = dataclasses.field(init=False, repr=False)
     nside: int | None = dataclasses.field(init=False, repr=False)
 
-    steps: list[int] = dataclasses.field(init=False, repr=False)
+    redshifts: np.ndarray = dataclasses.field(init=False, repr=False)
     shells: list[glass.RadialWindow] = dataclasses.field(init=False, repr=False)
 
     def __post_init__(self):
@@ -38,26 +40,20 @@ class Simulation:
             class_path = os.path.join(self.dir, class_path)
         self.cosmology = Cosmology(class_path)
 
+        self.outname = self.parameters.get("achOutName")
         self.nside = self.parameters.get("nSideHealpix")
 
-        z_values = np.genfromtxt(
-            os.path.join(self.dir, "z_values.txt"),
-            delimiter=",",
-            names=True,
+        self.redshifts = np.loadtxt(
+            os.path.join(self.dir, f"{self.outname}.log"), usecols=1
         )
+        if self.redshifts.shape != (self.parameters["nSteps"] + 1,):
+            raise ValueError("inconsistent steps in .par and .log file")
 
         self.shells = []
-        for step in range(self.parameters["nSteps"], 0, -1):
-            (found,) = np.where(z_values["Step"] == step)
-            if len(found) != 1:
-                raise ValueError(
-                    f"z_values.txt does not contain step {step}, inconsistent .par file?"
-                )
-            row = z_values[found[0]]
-            z_near, z_far = row[["z_near", "z_far"]]
+        for z1, z2 in itertools.pairwise(self.redshifts[::-1]):
             shell = glass.RadialWindow(
-                za=np.linspace(z_near, z_far, 100),
-                wa=np.ones(100),
+                za=np.array([z1, z2]),
+                wa=np.array([1.0, 1.0]),
             )
             self.shells.append(shell)
 
