@@ -6,8 +6,8 @@ import numpy as np
 
 class NpyLoader:
     def __init__(self, sim, path):
-        self.path = path if path is not None else sim.dir
-        self.outname = sim.parameters["achOutName"]
+        self.path = path
+        self.outname = sim.outname
 
     def __call__(self, step):
         tag = "lightcone" if step > 1 else "incomplete"
@@ -30,8 +30,8 @@ class ParquetLoader:
         return cls.read_parquet(path)
 
     def __init__(self, sim, path):
-        self.path = path if path is not None else sim.dir
-        self.outname = sim.parameters["achOutName"]
+        self.path = path
+        self.outname = sim.outname
         self.nside = sim.nside
 
     def __call__(self, step):
@@ -40,6 +40,8 @@ class ParquetLoader:
 
 
 def read_gowerst(sim, path=None, format="npy", *, zmax=None, nside=None, raw=False):
+    path = os.path.expanduser(path) if path is not None else sim.dir
+
     if format == "npy":
         loader = NpyLoader(sim, path)
     elif format == "parquet":
