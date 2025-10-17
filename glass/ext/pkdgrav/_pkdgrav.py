@@ -6,7 +6,7 @@ import numpy as np
 
 import glass
 
-from ._cosmology import Cosmology
+from ._cosmology import ClassCosmology, SimpleCosmology
 from ._parfile import read_par
 
 
@@ -32,13 +32,13 @@ class Simulation:
 
         self.parameters = read_par(self.path)
 
-        if not self.parameters.get("bClass", False):
-            raise ValueError("simulations with simple cosmology not supported")
-
-        class_path = self.parameters["achClassFilename"]
-        if not os.path.isabs(class_path):
-            class_path = os.path.join(self.dir, class_path)
-        self.cosmology = Cosmology(class_path)
+        if self.parameters.get("bClass", False):
+            class_path = self.parameters["achClassFilename"]
+            if not os.path.isabs(class_path):
+                class_path = os.path.join(self.dir, class_path)
+            self.cosmology = ClassCosmology(class_path)
+        else:
+            self.cosmology = SimpleCosmology(self.parameters)
 
         self.outname = self.parameters.get("achOutName")
         self.nside = self.parameters.get("nSideHealpix")
