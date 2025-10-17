@@ -54,6 +54,12 @@ class CosmologyMixin:
     def H0(self) -> float:
         return self.h * 100.0
 
+    def H(self, z: float) -> float:
+        return self.H0 * self.H_over_H0(z)
+
+    def H_over_H0(self, z: float) -> float:
+        return self.H(z) / self.H0
+
     def scale_factor(self, z: float) -> float:
         return self.scale_factor0 / (1 + z)
 
@@ -185,9 +191,6 @@ class ClassCosmology(CosmologyMixin):
     def H(self, z: float) -> float:
         return self._H(z)
 
-    def H_over_H0(self, z: float) -> float:
-        return self.H(z) / self.H0
-
     def age(self, z: float) -> float:
         return self._age(z)
 
@@ -262,9 +265,6 @@ class SimpleCosmology(CosmologyMixin):
 
         # integration for distance functions
         self._dist = make_dist_integr(self.H_over_H0)
-
-    def H(self, z: float) -> float:
-        return self.H0 * self.H_over_H0(z)
 
     def H_over_H0(self, z: float) -> float:
         a = 1 / (1 + z)
