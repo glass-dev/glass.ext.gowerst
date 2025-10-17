@@ -23,6 +23,19 @@ def make_dist_interp(z, x):
     return interp.antiderivative()
 
 
+def make_dist_integr(H_over_H0):
+    """Create integrator for dimensionless comoving distance."""
+
+    def H0_over_H(z):
+        return 1 / H_over_H0(z)
+
+    @np.vectorize(otypes=[float])
+    def integr(z):
+        return quad(H0_over_H, 0.0, z, epsabs=0.0, epsrel=1e-13, limit=1000)[0]
+
+    return integr
+
+
 class CosmologyMixin:
     def __repr__(self) -> str:
         clsname = self.__class__.__name__
@@ -248,18 +261,7 @@ class SimpleCosmology(CosmologyMixin):
         self.w_a = wa
 
         # integration for distance functions
-        @np.vectorize(otypes=[float])
-        def _dist(z: float) -> float:
-            return quad(
-                lambda z: self.H0 / self.H(z),
-                0.0,
-                z,
-                epsabs=0.0,
-                epsrel=1e-13,
-                limit=1000,
-            )[0]
-
-        self._dist = _dist
+        self._dist = make_dist_integr(self.H_over_H0)
 
     def H(self, z: float) -> float:
         return self.H0 * self.H_over_H0(z)
