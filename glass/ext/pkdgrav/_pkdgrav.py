@@ -1,7 +1,6 @@
 import dataclasses
 import os
 
-import healpy as hp
 import numpy as np
 
 import glass
@@ -61,29 +60,6 @@ class Simulation:
                 wa=np.ones(100),
             )
             self.shells.append(shell)
-
-    def lightcone(self, zmax=None, nside=None, raw=False):
-        outname = self.parameters["achOutName"]
-        steps = range(self.parameters["nSteps"], 0, -1)
-        for shell, step in zip(self.shells, steps):
-            if zmax is not None and zmax < shell.za.min():
-                break
-
-            tag = "lightcone" if step > 1 else "incomplete"
-            path = os.path.join(self.dir, f"{outname}.{step:05d}.{tag}.npy")
-
-            n = np.load(path)
-            if nside is not None and nside != hp.get_nside(n):
-                # keep the number of particles constant
-                ntot = n.sum()
-                n = hp.ud_grade(n, nside, power=-2)
-                assert n.sum() == ntot, "resampling lost particles!"
-
-            if raw:
-                yield n
-            else:
-                nbar = n.mean()
-                yield n / nbar - 1.0
 
 
 def load(path: str | os.PathLike[str]) -> Simulation:

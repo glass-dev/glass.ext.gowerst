@@ -3,8 +3,8 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "glass.ext.gowerst"
-description = "GLASS extension for loading GowerSt simulations"
+name = "glass.ext.pkdgrav"
+description = "GLASS extension for loading PKDGRAV simulations"
 readme = "README.md"
 requires-python = ">=3.10"
 license.text = "MIT License"
@@ -37,9 +37,9 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/glass-dev/glass.ext.gowerst"
-Documentation = "https://glass.readthedocs.io/projects/gowerst/"
-Issues = "https://github.com/glass-dev/glass.ext.gowerst/issues"
+Homepage = "https://github.com/glass-dev/glass.ext.pkdgrav"
+Documentation = "https://glass.readthedocs.io/projects/pkdgrav/"
+Issues = "https://github.com/glass-dev/glass.ext.pkdgrav/issues"
 
 [tool.hatch]
 version.source = "vcs"
