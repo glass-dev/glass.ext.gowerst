@@ -63,21 +63,39 @@ def read_gowerst(
     else:
         raise ValueError(f"unknown format: {format}")
 
+    # pre-compute some simulation properties
+    boxsize = sim.parameters["dBoxSize"] / sim.cosmology.h
+    density = (sim.parameters["nGrid"] / boxsize) ** 3
+
     steps = range(sim.parameters["nSteps"], 0, -1)
-    for shell, step in zip(sim.shells, steps):
-        if zmax is not None and zmax < shell.za.min():
+    redshifts = sim.redshifts
+    for step, z_near, z_far in zip(steps, redshifts, redshifts[1:]):
+        if zmax is not None and zmax < z_near:
             break
 
-        n = loader(step)
+        data = loader(step)
 
-        if nside is not None and nside != hp.get_nside(n):
+        comoving_volume = sim.cosmology.comoving_volume(z_near, z_far)
+
+        metadata = {
+            "comoving volume": comoving_volume,
+            "far redshift": z_far,
+            "mean density": density,
+            "mean particles": density * comoving_volume,
+            "near redshift": z_near,
+            "particles": data.sum(),
+        }
+
+        if nside is not None and nside != hp.get_nside(data):
             # keep the number of particles constant
-            ntot = n.sum()
-            n = hp.ud_grade(n, nside, power=-2)
-            assert n.sum() == ntot, "resampling lost particles!"
+            data = hp.ud_grade(data, nside, power=-2)
+            assert data.sum() == metadata["particles"], "resampling lost particles!"
 
-        if raw:
-            yield n
-        else:
-            nbar = n.mean()
-            yield n / nbar - 1.0
+        if not raw:
+            nbar = metadata["mean particles"] / data.size
+            data = data / nbar - 1.0
+
+        # attach metadata
+        data = data.view(np.dtype(data.dtype, metadata=metadata))
+
+        yield data
