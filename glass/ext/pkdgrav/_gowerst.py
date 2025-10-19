@@ -1,15 +1,19 @@
 import os
+from typing import Literal
+from collections.abc import Iterator
 
 import healpy as hp
 import numpy as np
 
+from ._pkdgrav import Simulation
+
 
 class NpyLoader:
-    def __init__(self, sim, path):
+    def __init__(self, sim: Simulation, path: str | os.PathLike[str]) -> None:
         self.path = path
         self.outname = sim.outname
 
-    def __call__(self, step):
+    def __call__(self, step: int) -> np.ndarray:
         tag = "lightcone" if step > 1 else "incomplete"
         path = os.path.join(self.path, f"{self.outname}.{step:05d}.{tag}.npy")
         return np.load(path)
@@ -19,7 +23,7 @@ class ParquetLoader:
     read_parquet = None
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: str | os.PathLike[str]) -> np.ndarray:
         if cls.read_parquet is None:
             try:
                 from pandas import read_parquet
@@ -27,19 +31,29 @@ class ParquetLoader:
                 raise ValueError("parquet format requires pandas") from exc
             else:
                 cls.read_parquet = read_parquet
-        return cls.read_parquet(path)
+        return cls.read_parquet(path).to_numpy().reshape(-1)
 
-    def __init__(self, sim, path):
+    def __init__(self, sim: Simulation, path: str | os.PathLike[str]) -> None:
         self.path = path
         self.outname = sim.outname
         self.nside = sim.nside
 
-    def __call__(self, step):
+    def __call__(self, step: int) -> np.ndarray:
         path = os.path.join(self.path, f"particles_{step}_{self.nside}.parquet")
-        return self.load(path).to_numpy().reshape(-1)
+        return self.load(path)
 
 
-def read_gowerst(sim, path=None, format="npy", *, zmax=None, nside=None, raw=False):
+def read_gowerst(
+    sim: Simulation,
+    path: str | os.PathLike[str] | None = None,
+    format: Literal["npy", "parquet"] = "npy",
+    *,
+    zmax: float | None = None,
+    nside: int | None = None,
+    raw: bool = False,
+) -> Iterator[np.ndarray]:
+    """Read simulation in GowerSt format."""
+
     path = os.path.expanduser(path) if path is not None else sim.dir
 
     if format == "npy":
