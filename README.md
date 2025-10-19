@@ -19,7 +19,7 @@ sim = glass.ext.pkdgrav.load("gowerst/run014/control.par")
 ```
 
 The resulting object has attributes such as `sim.parameters`, `sim.cosmology`,
-and `sim.shells` that describe the simulation.
+and `sim.redshifts` that describe the simulation.
 
 The matter shells can be read with the simulation-specific functions such as
 `glass.ext.pkdgrav.read_gowerst(sim)`.
@@ -41,9 +41,11 @@ import glass.ext.pkdgrav
 # load simulation
 sim = glass.ext.pkdgrav.load("gowerst/run014/control.par")
 
-# get simulation parameters
+# get the simulated cosmology
 cosmo = sim.cosmology
-shells = sim.shells
+
+# get shells for the simulation
+shells = glass.tophat_windows(sim.redshifts)
 
 # nside for computation; could be sim.nside
 nside = 1024

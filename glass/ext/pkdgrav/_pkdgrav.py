@@ -1,10 +1,7 @@
 import dataclasses
-import itertools
 import os
 
 import numpy as np
-
-import glass
 
 from ._cosmology import ClassCosmology, SimpleCosmology
 from ._parfile import read_par
@@ -22,7 +19,6 @@ class Simulation:
     nside: int | None = dataclasses.field(init=False, repr=False)
 
     redshifts: np.ndarray = dataclasses.field(init=False, repr=False)
-    shells: list[glass.RadialWindow] = dataclasses.field(init=False, repr=False)
 
     def __post_init__(self):
         self.path = os.path.realpath(os.path.expanduser(self.path))
@@ -43,19 +39,17 @@ class Simulation:
         self.outname = self.parameters.get("achOutName")
         self.nside = self.parameters.get("nSideHealpix")
 
-        self.redshifts = np.loadtxt(
-            os.path.join(self.dir, f"{self.outname}.log"), usecols=1
-        )
-        if self.redshifts.shape != (self.parameters["nSteps"] + 1,):
+        # load redshifts from logfile
+        z = np.loadtxt(os.path.join(self.dir, f"{self.outname}.log"), usecols=1)
+        if z.shape != (self.parameters["nSteps"] + 1,):
             raise ValueError("inconsistent steps in .par and .log file")
 
-        self.shells = []
-        for z1, z2 in itertools.pairwise(self.redshifts[::-1]):
-            shell = glass.RadialWindow(
-                za=np.array([z1, z2]),
-                wa=np.array([1.0, 1.0]),
-            )
-            self.shells.append(shell)
+        # replace nearly-zero final redshift by zero
+        if np.fabs(z[-1]) < 1e-14:
+            z[-1] = 0.0
+
+        # reorder redshifts from latest to earliest
+        self.redshifts = z[::-1]
 
 
 def load(path: str | os.PathLike[str]) -> Simulation:
