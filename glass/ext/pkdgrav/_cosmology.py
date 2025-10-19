@@ -80,6 +80,27 @@ class CosmologyMixin:
             x = np.sin(x * k) / k
         return self.hubble_distance * x
 
+    def differential_comoving_volume(self, z: float) -> float:
+        return (
+            self.transverse_comoving_distance(z) ** 2
+            * self.hubble_distance
+            / self.H_over_H0(z)
+        )
+
+    def comoving_volume(self, z: float, z2: float | None = None) -> float:
+        if z2 is not None:
+            return self.comoving_volume(z2) - self.comoving_volume(z)
+
+        x = self._dist(z)
+        k = self._K
+        if k > 0:
+            v = (np.sinh(2 * k * x) - 2 * k * x) / (4 * k**3)
+        elif k < 0:
+            v = (2 * k * x - np.sin(2 * k * x)) / (4 * k**3)
+        else:
+            v = x**3 / 3
+        return 4 * np.pi * v * self.hubble_distance**3
+
     @cached_property
     def Omega_k0(self) -> float:
         return 1 - self.Omega_tot0
