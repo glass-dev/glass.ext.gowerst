@@ -44,8 +44,7 @@ class Simulation:
         if z.shape != (self.parameters["nSteps"] + 1,):
             raise ValueError("inconsistent steps in .par and .log file")
 
-        # check if last redshifts is nearly zero
-        # if so, replace by zero
+        # replace nearly-zero final redshift by zero
         if np.fabs(z[-1]) < 1e-14:
             z[-1] = 0.0
 
